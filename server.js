@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json());
 
 /* =========================
-   🧠 OPENCLAW LOGIC LAYER
+   🧠 PROMPT LAYER
 ========================= */
 function openClaw(query) {
   return `
@@ -16,73 +16,85 @@ You are a senior AI research assistant.
 
 User topic: ${query}
 
-Follow this structure:
+Return structured answer:
 
-1. Key Concepts (simple explanation)
+1. Key Concepts
 2. Step-by-step learning roadmap
-3. Best free resources (links if possible)
+3. Best free resources
 4. Beginner project idea
-5. Bonus tips to master faster
+5. Practical tips
 
-Make it clear, structured, and practical.
+Make it simple, clear, and practical.
 `;
 }
 
 /* =========================
-   🔥 MAIN AI ENDPOINT
+   HEALTH CHECK
+========================= */
+app.get("/", (req, res) => {
+  res.send("PRO1 AI Backend Running");
+});
+
+/* =========================
+   MAIN ENDPOINT
 ========================= */
 app.post("/run", async (req, res) => {
   try {
-    const query = req.body.query;
+    const { query } = req.body;
 
     if (!query) {
-      return res.json({ result: "No query provided" });
+      return res.json({ result: "❌ No query provided" });
     }
 
-    // 🧠 1. OpenClaw prompt builder
-    const prompt = openClaw(query);
+    console.log("👉 Query:", query);
 
-    // 🧠 2. Call Gemini AI
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_KEY}`,
+  "https://api.groq.com/openai/v1/chat/completions",
+  {
+    model: "llama-3.3-70b-versatile", // ✅ FIXED
+    messages: [
       {
-        contents: [
-          {
-            parts: [{ text: prompt }]
-          }
-        ]
+        role: "system",
+        content: "You are a helpful AI research assistant."
+      },
+      {
+        role: "user",
+        content: openClaw(query)
       }
-    );
+    ]
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      "Content-Type": "application/json"
+    }
+  }
+);
 
-    // 🧠 3. Extract result safely
-    const result =
-      response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "No response from AI";
+    const result = response.data?.choices?.[0]?.message?.content;
 
-    // 🧠 4. Return to PRO2
+    if (!result) {
+      console.log("⚠️ FULL RESPONSE:", response.data);
+      return res.json({ result: "⚠️ No AI response" });
+    }
+
     res.json({ result });
 
   } catch (err) {
-    console.error("ERROR:", err.message);
+    console.log("🔥 ERROR:", err.response?.data || err.message);
 
-    res.json({
-      result: "Error generating response"
+    res.status(500).json({
+      error: "AI request failed",
+      details: err.response?.data || err.message
     });
   }
 });
 
 /* =========================
-   🟢 HEALTH CHECK
-========================= */
-app.get("/", (req, res) => {
-  res.send("OpenClaw AI Server Running 🚀");
-});
-
-/* =========================
-   🚀 START SERVER
+   START
 ========================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 PRO1 running on ${PORT}`);
 });
